@@ -1,0 +1,12 @@
+#define DEBUG 1
+#define MCU_FREQ 60
+#define MCU_T_MICROS (1000000.0 / MCU_FREQ) 
+#define DATA_LOGGER_INTERVAL_MS 1000
+#define SD_CARD_CS 5
+#define RADAR_BAUD_BPS 115200
+#define RADAR_MIN_DISTANCE 60
+#define RADAR_MAX_DISTANCE 2500
+#define RADAR_THR 30
+#define DETONATOR_GPIO_PIN 14
+#define PROXIMITY_THR_M 5.0
+#define ACQUISITION_CONFIRMATIONS 3 // Number of readings to confirm target
