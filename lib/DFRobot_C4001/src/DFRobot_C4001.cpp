@@ -628,11 +628,8 @@ bool DFRobot_C4001::setUart(uint32_t baud)
   }
   String data = "setUart ";
   data += baud;
-  Serial.println("Here1");
   writeCMD(data, data, (uint8_t)1);
-  Serial.println("Here2");
   DFRobot_C4001::setSensor(eResetSen);
-  Serial.println("Here3");
   return true;
 }
 
@@ -738,23 +735,16 @@ sResponseData_t DFRobot_C4001::wRCMD(String cmd1, uint8_t count)
 
 void DFRobot_C4001::writeCMD(String cmd1 , String cmd2, uint8_t count)
 {
-  Serial.println("Here1.1");
   sensorStop();
-  Serial.println("Here1.2");
   writeReg(0, (uint8_t *)cmd1.c_str(), cmd1.length());
-  Serial.println("Here1.3");
   delay(100);
-  Serial.println("Here1.4");
   if(count > 1){
-    Serial.println("Here1.5");
     delay(100);
     writeReg(0, (uint8_t *)cmd2.c_str(), cmd2.length());
     delay(100);
   }
-  Serial.println("Here1.6");
   writeReg(0, (uint8_t *)SAVE_CONFIG, strlen(SAVE_CONFIG));
   delay(100);
-  Serial.println("Here1.7");
   writeReg(0, (uint8_t *)START_SENSOR, strlen(START_SENSOR));
   delay(100);
 }
@@ -763,29 +753,19 @@ bool DFRobot_C4001::sensorStop(void)
 {
   uint8_t len = 0;
   uint8_t temp[200] = {0};
-  Serial.println("Here 1.1.1");
   writeReg(0, (uint8_t *)STOP_SENSOR, strlen(STOP_SENSOR));
-  Serial.println("Here 1.1.2");
   delay(1000);
   len = readReg(0, temp, 200);
-  Serial.println("Here 1.1.3");
   while(1){
-    Serial.println("Here 1.1.4");
     if(len != 0){
       if (strstr((const char *)temp, "sensorStop") != NULL) {
         return true;
       }
     }
-    Serial.println("Here 1.1.5");
     memset(temp, 0, 200);
-    Serial.println("Here 1.1.6");
     delay(400);
     writeReg(0, (uint8_t *)STOP_SENSOR, strlen(STOP_SENSOR));
-    Serial.println("Here 1.1.7");
     len = readReg(0, temp, 200);
-    Serial.print("len=");
-    Serial.println(len);
-    Serial.print("I2C_addr=");
   }
 }
 
@@ -817,7 +797,6 @@ void DFRobot_C4001_I2C::writeReg(uint8_t reg, uint8_t *data, uint8_t len)
 
 int16_t DFRobot_C4001_I2C::readReg(uint8_t reg, uint8_t *data, uint8_t len)
 {
-  Serial.println("readRegI2C");
   /* i2c get data */
   uint8_t i = 0;
   _pWire->beginTransmission(this->_I2C_addr);
