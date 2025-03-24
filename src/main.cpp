@@ -37,15 +37,18 @@ uint8_t rocket_is_moving_counter = 0; // Counter for movement confirmation
 uint8_t target_acquisition_counter = 0; // Counter for target confirmation
 String state_to_str(State state)
 {
+  String toret = "";
   switch (state)
   {
-    case IDLE: return "IDLE";
-    case MOVING: return "MOVING";
-    case ACQUIRING: return "ACQUIRING";
-    case TRACKING: return "TRACKING";
-    case DETONATING: return "DETONATING";
-    case END: return "END";
+    case IDLE: toret = "IDLE"; break;
+    case MOVING: toret = "MOVING"; break;
+    case ACQUIRING: toret = "ACQUIRING"; break;
+    case TRACKING: toret = "TRACKING"; break;
+    case DETONATING: toret = "DETONATING"; break;
+    case END: toret = "END"; break;
+    default: toret = ""; break;
   }
+  return toret;
 }
 
 // Loggers variables
@@ -56,6 +59,7 @@ DataLogger data_logger;
 // IMU variables
 Adafruit_MPU6050 mpu;
 float a_idle[3];
+sensors_event_t a; // Stores sensor acceleration data
 
 // Radar variables
 DFRobot_C4001_UART radar(&Serial1, RADAR_BAUD_BPS);
@@ -75,13 +79,10 @@ void init_detonator();
 bool is_rocket_moving();
 bool is_target_detected();
 
+// State machine actions functions definitions
+void detonate();
 
-void detonate()
-{
-  digitalWrite(DETONATOR_GPIO_PIN, HIGH);
-  delay(1000);
-  digitalWrite(DETONATOR_GPIO_PIN, LOW);
-}
+
 
 void setup()
 {
@@ -112,6 +113,11 @@ void loop()
 {
   uint32_t current_time = millis();
 
+  // Grab data from sensors
+  mpu.getAccelerometerSensor()->getEvent(&a); 
+  target_id = radar.getTargetNumber();
+  distance = radar.getTargetRange();
+
   Serial.println("State: " + state_to_str(state));
 
   switch (state)
@@ -132,7 +138,7 @@ void loop()
 
     case ACQUIRING:
       // Read radar target
-      target_id = radar.getTargetNumber();
+      // target_id = radar.getTargetNumber();
       if (target_id > 0)
       {
         target_acquisition_counter++;
@@ -148,8 +154,8 @@ void loop()
       break;
 
     case TRACKING:
-      target_id = radar.getTargetNumber(); // Needed
-      distance = radar.getTargetRange();
+      // target_id = radar.getTargetNumber(); // Needed
+      // distance = radar.getTargetRange();
       if (distance <= 0 || target_id <= 0)
       {
         state = MOVING;
@@ -179,10 +185,32 @@ void loop()
     prev_state = state;
   }
 
+  // Log data
+  String data_msg = "";
+  data_msg += String(micros()) + ",";
+  data_msg += String(a.acceleration.x) + ",";
+  data_msg += String(a.acceleration.y) + ",";
+  data_msg += String(a.acceleration.z) + ",";
+  data_msg += String(target_id) + ",";
+  data_msg += String(distance) + ",";
+  data_msg += state_to_str(state);
+  data_logger.log(data_msg);
+
   // Finish loop at the given MHz 
   while (micros() - loop_timer < MCU_T_MICROS);
   loop_timer = micros();
 }
+
+
+void setup1()
+{
+}
+
+void loop1()
+{
+
+}
+
 
 // --- Initialization functions
 
@@ -212,6 +240,17 @@ void init_loggers()
   #endif
   if (data_logger.init(DATA_LOGGER_INTERVAL_MS))
   {
+    // Write header of the CSV file
+    String data_logger_csv_header = "";
+    data_logger_csv_header += "timestamp,";
+    data_logger_csv_header += "accel_x,";
+    data_logger_csv_header += "accel_y,";
+    data_logger_csv_header += "accel_z,";
+    data_logger_csv_header += "radar_target_id,";
+    data_logger_csv_header += "radar_target_distance,";
+    data_logger_csv_header += "state";
+    data_logger.log(data_logger_csv_header);
+
     event_logger.log("DATA LOGGER INITIALIZED");
   }
   #if DEBUG
@@ -225,7 +264,7 @@ void init_loggers()
 void init_imu()
 {
   // Start connection
-  if (!mpu.begin())
+  if (!mpu.begin(MPU6050_I2CADDR_DEFAULT, &Wire1))
   {
     #if DEBUG
     Serial.println("IMU initialization failed.");
@@ -318,8 +357,7 @@ void init_detonator()
 bool is_rocket_moving()
 {
   // Read current acceleration
-  sensors_event_t a;
-  mpu.getAccelerometerSensor()->getEvent(&a); 
+  // mpu.getAccelerometerSensor()->getEvent(&a); 
   // Compute difference in y-axis
   float delta_y = a.acceleration.y - a_idle[1];
   // Check if acceleration exceeds threshold
@@ -341,7 +379,7 @@ bool is_rocket_moving()
 bool is_target_detected()
 {
   // Read radar target
-  target_id = radar.getTargetNumber();
+  // target_id = radar.getTargetNumber();
   // Check if target is present
   if (target_id > 0)
   {
@@ -351,4 +389,11 @@ bool is_target_detected()
   }
 
   return false;
+}
+
+void detonate()
+{
+  digitalWrite(DETONATOR_GPIO_PIN, HIGH);
+  delay(1000);
+  digitalWrite(DETONATOR_GPIO_PIN, LOW);
 }
