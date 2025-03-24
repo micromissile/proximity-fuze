@@ -54,7 +54,6 @@ String state_to_str(State state)
 // Loggers variables
 EventLogger event_logger;
 DataLogger data_logger;
-// TODO; move sd card logging to second core; keep logic + sensor collection on core 0
 
 // IMU variables
 Adafruit_MPU6050 mpu;
@@ -81,8 +80,6 @@ bool is_target_detected();
 
 // State machine actions functions definitions
 void detonate();
-
-
 
 void setup()
 {
@@ -118,7 +115,9 @@ void loop()
   target_id = radar.getTargetNumber();
   distance = radar.getTargetRange();
 
+  #if DEBUG
   Serial.println("State: " + state_to_str(state));
+  #endif
 
   switch (state)
   {
@@ -137,8 +136,6 @@ void loop()
       break;
 
     case ACQUIRING:
-      // Read radar target
-      // target_id = radar.getTargetNumber();
       if (target_id > 0)
       {
         target_acquisition_counter++;
@@ -186,31 +183,23 @@ void loop()
   }
 
   // Log data
-  String data_msg = "";
-  data_msg += String(micros()) + ",";
-  data_msg += String(a.acceleration.x) + ",";
-  data_msg += String(a.acceleration.y) + ",";
-  data_msg += String(a.acceleration.z) + ",";
-  data_msg += String(target_id) + ",";
-  data_msg += String(distance) + ",";
-  data_msg += state_to_str(state);
-  data_logger.log(data_msg);
+  if (state != END)
+  {
+    String data_msg = "";
+    data_msg += String(micros()) + ",";
+    data_msg += String(a.acceleration.x) + ",";
+    data_msg += String(a.acceleration.y) + ",";
+    data_msg += String(a.acceleration.z) + ",";
+    data_msg += String(target_id) + ",";
+    data_msg += String(distance) + ",";
+    data_msg += state_to_str(state);
+    data_logger.log(data_msg);
+  }
 
   // Finish loop at the given MHz 
   while (micros() - loop_timer < MCU_T_MICROS);
   loop_timer = micros();
 }
-
-
-void setup1()
-{
-}
-
-void loop1()
-{
-
-}
-
 
 // --- Initialization functions
 
@@ -356,8 +345,6 @@ void init_detonator()
 
 bool is_rocket_moving()
 {
-  // Read current acceleration
-  // mpu.getAccelerometerSensor()->getEvent(&a); 
   // Compute difference in y-axis
   float delta_y = a.acceleration.y - a_idle[1];
   // Check if acceleration exceeds threshold
@@ -378,9 +365,7 @@ bool is_rocket_moving()
 
 bool is_target_detected()
 {
-  // Read radar target
-  // target_id = radar.getTargetNumber();
-  // Check if target is present
+  // Check if target is detected
   if (target_id > 0)
   {
     // Initialize the acquisition counter

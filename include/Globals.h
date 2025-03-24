@@ -1,7 +1,7 @@
 #define DEBUG 1
-#define MCU_FREQ 60
+#define MCU_FREQ 110
 #define MCU_T_MICROS (1000000.0 / MCU_FREQ) 
-#define DATA_LOGGER_INTERVAL_MS 1000
+#define DATA_LOGGER_INTERVAL_MS 50
 // GPIO definitions
 #define SD_CARD_CS 5
 #define DETONATOR_GPIO_PIN 14
