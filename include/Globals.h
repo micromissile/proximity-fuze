@@ -14,5 +14,5 @@
 // State machine global variables; format STATE_VAR_NAME
 #define IDLE_IMU_ACCEL_IS_MOVING_THR 1.0 // Acceleration threshold in m/s^2
 #define IDLE_IMU_IS_MOVING_PERSISTENT_COUNT 5 // Number of consecutive readings to confirm movement
+#define ACQUIRING_NUM_CONFIRMATIONS 3 // Number of readings to confirm target
 #define PROXIMITY_THR_M 5.0
-#define ACQUISITION_CONFIRMATIONS 3 // Number of readings to confirm target

@@ -1,7 +1,7 @@
 /**
  * Author: Joshua Soutelo Vieira
  * Email: joshua@micro-missile.xyz
- * Last update: 22-03-2025
+ * Last update: 23-03-2025
  * 
  * Radar based proximity fuze.
  * 
@@ -12,16 +12,12 @@
  * | IDLE          | accel_y > 1 m/s^2                     | MOVING     | -                  |
  * | MOVING        | target_id > 0                         | ACQUIRING  | -                  |
  * | ACQUIRING     | acquisition_count >= 3                | TRACKING   | -                  |
- * | ACQUIRING     | target_id == 0 || distance <= 0       | IDLE       | -                  |
- * | TRACKING      | distance <= PROXIMITY_THR_M           | ARMED      | -                  |
- * | TRACKING      | distance <= 0 || target_id == 0       | IDLE       | -                  |
- * | ARMED         | arming_pin == HIGH                    | DETONATING | -                  |
- * | ARMED         | distance > PROXIMITY_THR_M            | TRACKING   | -                  |
- * | ARMED         | distance <= 0 || target_id == 0       | IDLE       | -                  |
- * | DETONATING    | detonation complete                   | COOLDOWN   | Trigger detonator  |
- * | COOLDOWN      | current_time - state_timer >= 2000    | IDLE       | -                  |
+ * | TRACKING      | distance <= 5.0 m                     | DETONATING | -                  |
+ * | TRACKING      | distance <= 0 || target_id == 0       | MOVING     | -                  |
+ * | DETONATING    | detonation complete                   | END        | Trigger detonator  |
  * 
  */
+
 #include <Arduino.h>
 #include "Globals.h"
 #include <Logger.h>
@@ -32,13 +28,13 @@
 #include <DFRobot_C4001.h>
 
 // State machine variables
-enum State {IDLE, MOVING, ACQUIRING, TRACKING, ARMED, DETONATING, END};
+enum State {IDLE, MOVING, ACQUIRING, TRACKING, DETONATING, END};
 State state = IDLE;
 State prev_state = IDLE;
 uint32_t state_timer = 0; // Timer for state-specific delays
 // State machine events variables
-uint8_t idle_is_moving_counter = 0; // Counter for movement confirmation
-uint8_t acquisition_count = 0; // Counter for target confirmation
+uint8_t rocket_is_moving_counter = 0; // Counter for movement confirmation
+uint8_t target_acquisition_counter = 0; // Counter for target confirmation
 String state_to_str(State state)
 {
   switch (state)
@@ -47,7 +43,6 @@ String state_to_str(State state)
     case MOVING: return "MOVING";
     case ACQUIRING: return "ACQUIRING";
     case TRACKING: return "TRACKING";
-    case ARMED: return "ARMED";
     case DETONATING: return "DETONATING";
     case END: return "END";
   }
@@ -73,30 +68,13 @@ uint32_t loop_timer;
 // Initialization functions definitions
 void init_loggers();
 void init_imu();
+void init_radar();
+void init_detonator();
 
 // State machine events functions definitions
 bool is_rocket_moving();
 bool is_target_detected();
 
-
-void init_radar()
-{
-  // Start connection with radar
-  Serial.print("Initializing radar...");
-  while(!radar.begin())
-  {
-    Serial.println("Radar not found.");
-    delay(1000);
-  }
-  Serial.println("Radar found.");
-}
-
-void init_detonator()
-{
-  pinMode(DETONATOR_GPIO_PIN, OUTPUT);
-  digitalWrite(DETONATOR_GPIO_PIN, LOW);
-  Serial.println("Detonator set up");
-}
 
 void detonate()
 {
@@ -145,20 +123,21 @@ void setup()
   #endif
 
   // Initialize loggers
-  // init_loggers();
+  init_loggers();
 
   // Initialize 6-axis IMU MPU6050
   init_imu();
 
   // Initialize the radar
-  // init_radar();
+  init_radar();
+
   // Initialize the detonator
-  // init_detonator();
+  init_detonator();
 
   // Start the timer
   loop_timer = micros();
 
-  // event_logger.log("SYSTEM INITALIZED IN STATE: " + state_to_str(state));
+  event_logger.log("SYSTEM INITALIZED IN STATE: " + state_to_str(state));
 }
 
 void loop()
@@ -175,74 +154,46 @@ void loop()
       break;
     
     case MOVING:
-      target_id = radar.getTargetNumber();
-      if (target_id > 0)
+      if (is_target_detected())
       {
         state = ACQUIRING;
-        acquisition_count = 0;
-        Serial.println("Potential target detected, moving to ACQUIRING");
       }
       break;
 
     case ACQUIRING:
+      // Read radar target
       target_id = radar.getTargetNumber();
-      distance = radar.getTargetRange();
-      if (target_id > 0 && distance > 0)
+      if (target_id > 0)
       {
-        acquisition_count++;
-        Serial.print("Acquisition count: ");
-        Serial.println(acquisition_count);
-        if (acquisition_count >= ACQUISITION_CONFIRMATIONS)
+        target_acquisition_counter++;
+        if (target_acquisition_counter >= ACQUIRING_NUM_CONFIRMATIONS)
         {
           state = TRACKING;
-          Serial.println("Target confirmed, moving to TRACKING");
         }
       }
       else
       {
-        state = IDLE;
-        Serial.println("Target lost, returning to IDLE");
+        state = MOVING;
       }
       break;
 
     case TRACKING:
+      target_id = radar.getTargetNumber(); // Needed
       distance = radar.getTargetRange();
-      if (distance <= 0 || radar.getTargetNumber() == 0)
+      if (distance <= 0 || target_id <= 0)
       {
-        state = IDLE;
-        Serial.println("Target lost, returning to IDLE");
+        state = MOVING;
       }
       else if (distance <= PROXIMITY_THR_M)
       {
-        state = ARMED;
-        Serial.println("Target in range, moving to ARMED");
+        state = DETONATING;
       }
-      break;
-
-    case ARMED:
-      distance = radar.getTargetRange();
-      if (distance <= 0 || radar.getTargetNumber() == 0)
-      {
-        state = IDLE;
-        Serial.println("Target lost, returning to IDLE");
-      }
-      else if (distance > PROXIMITY_THR_M)
-      {
-        state = TRACKING;
-        Serial.println("Target out of range, returning to TRACKING");
-      }
-      // else if (digitalRead(ARMING_PIN) == HIGH)
-      // {
-      //   state = DETONATING;
-      //   Serial.println("Armed and ready, moving to DETONATING");
-      // }
       break;
 
     case DETONATING:
       detonate();
       state = END;
       state_timer = current_time;
-      Serial.println("Detonation complete, moving to COOLDOWN");
       break;
     
     case END:
@@ -351,6 +302,47 @@ void init_imu()
   event_logger.log(imu_event_msg);
 }
 
+void init_radar()
+{
+  #if DEBUG
+  Serial.print("Initializing radar...");
+  #endif
+  // Start connection with radar
+  while(!radar.begin())
+  {
+    #if DEBUG
+    Serial.println("Radar not found.");
+    #endif
+    delay(1000);
+  }
+  #if DEBUG
+  Serial.println("Radar found.");
+  #endif
+
+  // Log radar event
+  String radar_event_msg = "";
+  radar_event_msg += "RADAR INITIALIZED\n";
+  radar_event_msg += "RADAR MIN RANGE:" + String(radar.getMinRange()) + "\n";
+  radar_event_msg += "RADAR MAX RANGE:" + String(radar.getMaxRange()) + "\n";
+  radar_event_msg += "RADAR THR FACTOR:" + String(radar.getThresRange()) + "\n";
+  event_logger.log(radar_event_msg);
+}
+
+void init_detonator()
+{
+  // Initialize detonator pin low
+  pinMode(DETONATOR_GPIO_PIN, OUTPUT);
+  digitalWrite(DETONATOR_GPIO_PIN, LOW);
+  #if DEBUG
+  Serial.println("Detonator initialized.");
+  #endif
+  // Log detonator event
+  String detonator_event_msg = "";
+  detonator_event_msg += "DETONATOR INITIALIZED\n";
+  detonator_event_msg += "DETONATOR PIN: " + String(DETONATOR_GPIO_PIN) + "\n";
+  event_logger.log(detonator_event_msg);
+}
+
 // --- State machine events functions ---
 
 bool is_rocket_moving()
@@ -363,20 +355,30 @@ bool is_rocket_moving()
   // Check if acceleration exceeds threshold
   if (delta_y > IDLE_IMU_ACCEL_IS_MOVING_THR)
   {
-    idle_is_moving_counter++;
-    if (idle_is_moving_counter >= IDLE_IMU_IS_MOVING_PERSISTENT_COUNT)
+    rocket_is_moving_counter++;
+    if (rocket_is_moving_counter >= IDLE_IMU_IS_MOVING_PERSISTENT_COUNT)
     {
       return true;
     }
   }
   else
   {
-    idle_is_moving_counter = 0;
+    rocket_is_moving_counter = 0;
   }
   return false;
 }
 
 bool is_target_detected()
 {
+  // Read radar target
+  target_id = radar.getTargetNumber();
+  // Check if target is present
+  if (target_id > 0)
+  {
+    // Initialize the acquisition counter
+    target_acquisition_counter = 0;
+    return true;
+  }
 
+  return false;
 }
