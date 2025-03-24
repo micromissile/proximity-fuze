@@ -17,6 +17,7 @@ class Logger
     public:
         virtual bool init(const String &prefix, const String &extension);
         virtual void log(const String &data) = 0;
+        bool close();
 };
 
 

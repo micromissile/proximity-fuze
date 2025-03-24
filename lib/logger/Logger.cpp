@@ -41,6 +41,16 @@ bool Logger::init(const String &prefix, const String &extension)
     return true;
 }
 
+bool Logger::close()
+{
+    if (!log_file)
+    {
+        log_file.close();
+        return true;
+    }
+    return false;
+}
+
 // --- EventLogger implementation --- 
 bool EventLogger::init(const String &prefix)
 {

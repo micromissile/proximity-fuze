@@ -170,6 +170,8 @@ void loop()
       break;
     
     case END:
+      event_logger.close();
+      data_logger.close();
       break;
   }
   
