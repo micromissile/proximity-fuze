@@ -7,7 +7,8 @@
 #define DETONATOR_GPIO_PIN 14
 // Sensors global variables
 #define IMU_ACCEL_CALIBRATION_SAMPLES 100 // Number of samples for calibration
-#define RADAR_BAUD_BPS 115200
+#define RADAR_SERIAL Serial2
+#define RADAR_BAUD_BPS 9600
 #define RADAR_MIN_DISTANCE 60
 #define RADAR_MAX_DISTANCE 2500
 #define RADAR_THR 30
