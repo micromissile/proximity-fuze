@@ -61,7 +61,7 @@ float a_idle[3];
 sensors_event_t a; // Stores sensor acceleration data
 
 // Radar variables
-DFRobot_C4001_UART radar(&Serial1, RADAR_BAUD_BPS);
+DFRobot_C4001_UART radar(&RADAR_SERIAL, RADAR_BAUD_BPS);
 float distance = 0.0;
 uint8_t target_id = 0;
 
@@ -122,6 +122,8 @@ void loop()
   switch (state)
   {
     case IDLE: 
+      Serial.println(target_id);
+      Serial.println(distance);
       if (is_rocket_moving())
       {
         state = MOVING;
