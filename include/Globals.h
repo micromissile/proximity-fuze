@@ -17,3 +17,4 @@
 #define IDLE_IMU_IS_MOVING_PERSISTENT_COUNT 5 // Number of consecutive readings to confirm movement
 #define ACQUIRING_NUM_CONFIRMATIONS 3 // Number of readings to confirm target
 #define PROXIMITY_THR_M 5.0
+#define DETONATOR_ACTIVE_TIME_MS 5000

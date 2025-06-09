@@ -383,6 +383,6 @@ bool is_target_detected()
 void detonate()
 {
   digitalWrite(DETONATOR_GPIO_PIN, HIGH);
-  delay(1000);
+  delay(DETONATOR_ACTIVE_TIME_MS);
   digitalWrite(DETONATOR_GPIO_PIN, LOW);
 }
