@@ -42,3 +42,9 @@ Change the following values to they are like these:
 ```
 
 Pinout configuration from [here](https://github.com/earlephilhower/arduino-pico/blob/master/variants/waveshare_rp2040_zero/pins_arduino.h).
+
+# Execute detonator field test
+
+```bash
+pio run -e pico_field_test_detonator --target upload
+```
