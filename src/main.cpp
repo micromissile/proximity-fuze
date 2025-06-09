@@ -122,8 +122,6 @@ void loop()
   switch (state)
   {
     case IDLE: 
-      Serial.println(target_id);
-      Serial.println(distance);
       if (is_rocket_moving())
       {
         state = MOVING;
@@ -153,8 +151,6 @@ void loop()
       break;
 
     case TRACKING:
-      // target_id = radar.getTargetNumber(); // Needed
-      // distance = radar.getTargetRange();
       if (distance <= 0 || target_id <= 0)
       {
         state = MOVING;
