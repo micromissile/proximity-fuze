@@ -32,6 +32,7 @@ enum State {IDLE, MOVING, ACQUIRING, TRACKING, DETONATING, END};
 State state = IDLE;
 State prev_state = IDLE;
 uint32_t state_timer = 0; // Timer for state-specific delays
+uint32_t failsafe_timer = 0; // Timer for 15-minute failsafe
 // State machine events variables
 uint8_t rocket_is_moving_counter = 0; // Counter for movement confirmation
 uint8_t target_acquisition_counter = 0; // Counter for target confirmation
@@ -81,6 +82,12 @@ bool is_target_detected();
 // State machine actions functions definitions
 void detonate();
 
+// State machine failsafe check function
+// TODO: move to StateMachine class
+#ifdef DEBUG_FAILSAFE
+#define FAILSAFE_TIMEOUT_MS 5 * 1000 // 5 seconds
+#endif
+
 void setup()
 {
   #if DEBUG
@@ -103,12 +110,34 @@ void setup()
   // Start the timer
   loop_timer = micros();
 
+  #if DEBUG
+  Serial.print("SYSTEM INITALIZED IN STATE: ");
+  Serial.println(state_to_str(state));
+  #endif
   event_logger.log("SYSTEM INITALIZED IN STATE: " + state_to_str(state));
+
+  // Start failsafe timer 
+  failsafe_timer = millis();
+  #if DEBUG
+  Serial.println("FAILSAFE TIMER STARTED");
+  #endif
+  event_logger.log("FAILSAFE TIMER STARTED");
 }
 
 void loop()
 {
   uint32_t current_time = millis();
+
+  // Check failsafe timer
+  if ((current_time - failsafe_timer) >= FAILSAFE_TIMEOUT_MS)
+  {
+    // Go to END state
+    state = END;
+    #if DEBUG
+    Serial.println("FAILSAFE TRIGGERED: 15-minute timeout reached");
+    #endif
+    event_logger.log("FAILSAFE TRIGGERED: 15-minute timeout reached");
+  }
 
   // Grab data from sensors
   mpu.getAccelerometerSensor()->getEvent(&a); 
@@ -170,6 +199,15 @@ void loop()
     case END:
       event_logger.close();
       data_logger.close();
+
+      // Check failsafe
+      // TODO: move to StateMachine class
+      #ifdef DEBUG_FAILSAFE
+      Serial.println("FAILSAFE TRIGGERED: check passed");
+      #endif  
+
+      while(1);
+
       break;
   }
   

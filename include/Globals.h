@@ -1,4 +1,3 @@
-#define DEBUG 1
 #define MCU_FREQ 110
 #define MCU_T_MICROS (1000000.0 / MCU_FREQ) 
 #define DATA_LOGGER_INTERVAL_MS 50
@@ -18,3 +17,4 @@
 #define ACQUIRING_NUM_CONFIRMATIONS 3 // Number of readings to confirm target
 #define PROXIMITY_THR_M 5.0
 #define DETONATOR_ACTIVE_TIME_MS 5000
+#define FAILSAFE_TIMEOUT_MS 15 * 60 * 1000 // 15 minutes in milliseconds
