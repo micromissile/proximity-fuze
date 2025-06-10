@@ -48,3 +48,9 @@ Pinout configuration from [here](https://github.com/earlephilhower/arduino-pico/
 ```bash
 pio run -e pico_field_test_detonator --target upload
 ```
+
+# Run tests
+
+```bash
+pio test -e pico_test
+```
