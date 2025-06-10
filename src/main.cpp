@@ -26,6 +26,7 @@
 #include <Wire.h>
 #include <time.h>
 #include <DFRobot_C4001.h>
+#include <Adafruit_NeoPixel.h>
 
 // State machine variables
 enum State {IDLE, MOVING, ACQUIRING, TRACKING, DETONATING, END};
@@ -52,6 +53,9 @@ String state_to_str(State state)
   return toret;
 }
 
+// NeoPixel variables
+Adafruit_NeoPixel pixels(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+
 // Loggers variables
 EventLogger event_logger;
 DataLogger data_logger;
@@ -70,6 +74,7 @@ uint8_t target_id = 0;
 uint32_t loop_timer;
 
 // Initialization functions definitions
+void init_neopixel();
 void init_loggers();
 void init_imu();
 void init_radar();
@@ -94,6 +99,13 @@ void setup()
   Serial.begin(115200);
   while (!Serial);
   #endif
+
+  // Initialize NeoPixel
+  init_neopixel();
+
+  // Set pixel color to blue
+  pixels.setPixelColor(0, pixels.Color(0, 0, 255));
+  pixels.show();
 
   // Initialize loggers
   init_loggers();
@@ -122,6 +134,10 @@ void setup()
   Serial.println("FAILSAFE TIMER STARTED");
   #endif
   event_logger.log("FAILSAFE TIMER STARTED");
+
+  // Set pixel color to green
+  pixels.setPixelColor(0, pixels.Color(0, 255, 0));
+  pixels.show();
 }
 
 void loop()
@@ -206,6 +222,10 @@ void loop()
       Serial.println("FAILSAFE TRIGGERED: check passed");
       #endif  
 
+      // Set pixel color to red
+      pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+      pixels.show();
+
       while(1);
 
       break;
@@ -240,6 +260,13 @@ void loop()
 }
 
 // --- Initialization functions
+
+void init_neopixel()
+{
+  pixels.begin();
+  pixels.clear();
+  pixels.show();
+}
 
 void init_loggers()
 {
