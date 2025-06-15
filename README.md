@@ -49,6 +49,12 @@ Pinout configuration from [here](https://github.com/earlephilhower/arduino-pico/
 pio run -e pico_field_test_detonator --target upload
 ```
 
+# Get radar readings
+
+```bash
+pio run -e pico_debug_radar --target upload
+```
+
 # Run tests
 
 ```bash

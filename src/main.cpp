@@ -164,6 +164,12 @@ void loop()
   Serial.println("State: " + state_to_str(state));
   #endif
 
+  #if DEBUG_RADAR
+  Serial.print("target_id=");
+  Serial.print(target_id);
+  Serial.print(": distance=");
+  Serial.println(distance);
+  #else
   switch (state)
   {
     case IDLE: 
@@ -253,6 +259,8 @@ void loop()
     data_msg += state_to_str(state);
     data_logger.log(data_msg);
   }
+
+  #endif // DEBUG_RADAR
 
   // Finish loop at the given MHz 
   while (micros() - loop_timer < MCU_T_MICROS);
