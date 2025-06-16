@@ -10,10 +10,7 @@
  * | Current State | Event/Condition                       | Next State | Action             |
  * |---------------|---------------------------------------|------------|--------------------|
  * | IDLE          | accel_y > 1 m/s^2                     | MOVING     | -                  |
- * | MOVING        | target_id > 0                         | ACQUIRING  | -                  |
- * | ACQUIRING     | acquisition_count >= 3                | TRACKING   | -                  |
- * | TRACKING      | distance <= 5.0 m                     | DETONATING | -                  |
- * | TRACKING      | distance <= 0 || target_id == 0       | MOVING     | -                  |
+ * | MOVING        | elapsed_time > 5s                     | DETONATING | -                  |
  * | DETONATING    | detonation complete                   | END        | Trigger detonator  |
  * 
  */
@@ -29,14 +26,14 @@
 #include <Adafruit_NeoPixel.h>
 
 // State machine variables
-enum State {IDLE, MOVING, ACQUIRING, TRACKING, DETONATING, END};
+enum State {IDLE, MOVING, DETONATING, END};
 State state = IDLE;
 State prev_state = IDLE;
 uint32_t state_timer = 0; // Timer for state-specific delays
 uint32_t failsafe_timer = 0; // Timer for 15-minute failsafe
 // State machine events variables
 uint8_t rocket_is_moving_counter = 0; // Counter for movement confirmation
-uint8_t target_acquisition_counter = 0; // Counter for target confirmation
+uint32_t detonator_timer_start;
 String state_to_str(State state)
 {
   String toret = "";
@@ -44,8 +41,6 @@ String state_to_str(State state)
   {
     case IDLE: toret = "IDLE"; break;
     case MOVING: toret = "MOVING"; break;
-    case ACQUIRING: toret = "ACQUIRING"; break;
-    case TRACKING: toret = "TRACKING"; break;
     case DETONATING: toret = "DETONATING"; break;
     case END: toret = "END"; break;
     default: toret = ""; break;
@@ -64,11 +59,7 @@ DataLogger data_logger;
 Adafruit_MPU6050 mpu;
 float a_idle[3];
 sensors_event_t a; // Stores sensor acceleration data
-
-// Radar variables
-DFRobot_C4001_UART radar(&RADAR_SERIAL, RADAR_BAUD_BPS);
-float distance = 0.0;
-uint8_t target_id = 0;
+sensors_event_t g; // Stores sensor gyroscope data
 
 // MCU clock frequency variable
 uint32_t loop_timer;
@@ -77,12 +68,11 @@ uint32_t loop_timer;
 void init_neopixel();
 void init_loggers();
 void init_imu();
-void init_radar();
 void init_detonator();
 
 // State machine events functions definitions
 bool is_rocket_moving();
-bool is_target_detected();
+bool is_detonator_timer_finished();
 
 // State machine actions functions definitions
 void detonate();
@@ -112,9 +102,6 @@ void setup()
 
   // Initialize 6-axis IMU MPU6050
   init_imu();
-
-  // Initialize the radar
-  init_radar();
 
   // Initialize the detonator
   init_detonator();
@@ -155,64 +142,37 @@ void loop()
     event_logger.log("FAILSAFE TRIGGERED: 15-minute timeout reached");
   }
 
-  // Grab data from sensors
+  // Grab data from IMU
   mpu.getAccelerometerSensor()->getEvent(&a); 
-  target_id = radar.getTargetNumber();
-  distance = radar.getTargetRange();
+  mpu.getGyroSensor()->getEvent(&g); 
 
   #if DEBUG
   Serial.println("State: " + state_to_str(state));
   #endif
 
-  #if DEBUG_RADAR
-  Serial.print("target_id=");
-  Serial.print(target_id);
-  Serial.print(": distance=");
-  Serial.println(distance);
-  #else
   switch (state)
   {
     case IDLE: 
       if (is_rocket_moving())
       {
         state = MOVING;
+        detonator_timer_start = millis();
       }
       break;
     
     case MOVING:
-      if (is_target_detected())
-      {
-        state = ACQUIRING;
-      }
-      break;
-
-    case ACQUIRING:
-      if (target_id > 0)
-      {
-        target_acquisition_counter++;
-        if (target_acquisition_counter >= ACQUIRING_NUM_CONFIRMATIONS)
-        {
-          state = TRACKING;
-        }
-      }
-      else
-      {
-        state = MOVING;
-      }
-      break;
-
-    case TRACKING:
-      if (distance <= 0 || target_id <= 0)
-      {
-        state = MOVING;
-      }
-      else if (distance <= PROXIMITY_THR_M)
+      if (is_detonator_timer_finished())
       {
         state = DETONATING;
       }
       break;
 
     case DETONATING:
+      #if DEBUG
+      // Set pixel color to red
+      pixels.setPixelColor(0, pixels.Color(128, 32, 0));
+      pixels.show();
+      #endif
       detonate();
       state = END;
       state_timer = current_time;
@@ -254,13 +214,12 @@ void loop()
     data_msg += String(a.acceleration.x) + ",";
     data_msg += String(a.acceleration.y) + ",";
     data_msg += String(a.acceleration.z) + ",";
-    data_msg += String(target_id) + ",";
-    data_msg += String(distance) + ",";
+    data_msg += String(g.gyro.x) + ",";
+    data_msg += String(g.gyro.y) + ",";
+    data_msg += String(g.gyro.z) + ",";
     data_msg += state_to_str(state);
     data_logger.log(data_msg);
   }
-
-  #endif // DEBUG_RADAR
 
   // Finish loop at the given MHz 
   while (micros() - loop_timer < MCU_T_MICROS);
@@ -308,8 +267,9 @@ void init_loggers()
     data_logger_csv_header += "accel_x,";
     data_logger_csv_header += "accel_y,";
     data_logger_csv_header += "accel_z,";
-    data_logger_csv_header += "radar_target_id,";
-    data_logger_csv_header += "radar_target_distance,";
+    data_logger_csv_header += "gyro_x,";
+    data_logger_csv_header += "gyro_y,";
+    data_logger_csv_header += "gyro_z,";
     data_logger_csv_header += "state";
     data_logger.log(data_logger_csv_header);
 
@@ -341,6 +301,7 @@ void init_imu()
   // Configure
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
 
   // Calibration
   float sum[3] = {0., 0., 0.};
@@ -371,32 +332,6 @@ void init_imu()
   imu_event_msg += "IDLE AY: " + String(a_idle[1]) + "\n";
   imu_event_msg += "IDLE AZ: " + String(a_idle[2]) + "\n";
   event_logger.log(imu_event_msg);
-}
-
-void init_radar()
-{
-  #if DEBUG
-  Serial.print("Initializing radar...");
-  #endif
-  // Start connection with radar
-  while(!radar.begin())
-  {
-    #if DEBUG
-    Serial.println("Radar not found.");
-    #endif
-    delay(1000);
-  }
-  #if DEBUG
-  Serial.println("Radar found.");
-  #endif
-
-  // Log radar event
-  String radar_event_msg = "";
-  radar_event_msg += "RADAR INITIALIZED\n";
-  radar_event_msg += "RADAR MIN RANGE:" + String(radar.getMinRange()) + "\n";
-  radar_event_msg += "RADAR MAX RANGE:" + String(radar.getMaxRange()) + "\n";
-  radar_event_msg += "RADAR THR FACTOR:" + String(radar.getThresRange()) + "\n";
-  event_logger.log(radar_event_msg);
 }
 
 void init_detonator()
@@ -436,17 +371,13 @@ bool is_rocket_moving()
   return false;
 }
 
-bool is_target_detected()
+bool is_detonator_timer_finished()
 {
-  // Check if target is detected
-  if (target_id > 0)
-  {
-    // Initialize the acquisition counter
-    target_acquisition_counter = 0;
-    return true;
-  }
-
-  return false;
+  #if DEBUG
+  Serial.print("Timer: ");
+  Serial.println(millis() - detonator_timer_start);
+  #endif
+  return (millis() - detonator_timer_start >= DETONATOR_TIMER_MS);
 }
 
 void detonate()
